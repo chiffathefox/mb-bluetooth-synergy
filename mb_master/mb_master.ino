@@ -1266,21 +1266,38 @@ void runModule(uint8_t device)
   switch(device)
   {
     case MOTOR:
-      Serial.println("MOTOR");
       {
         int16_t speed = readShort(7);
         dc.reset(port);
         dc.run(speed);
+
+        Serial.print("MOTOR ");
+        Serial.print(port);
+        Serial.print(" ");
+        Serial.println(speed);
+
+        char buf[sizeof ("motor255,-32768")];
+        sprintf(buf, "motor%u,%d", port, speed);
+        synergy.broadcastJob(buf);
       }
       break;
     case ENCODER_BOARD:
-      Serial.println("ENCODER_BOARD");
       if(port == 0)
       {
         uint8_t slot = readBuffer(7);
         int16_t speed_value = readShort(8);
         speed_value = -speed_value;
 
+      Serial.print("ENCODER_BOARD ");
+      Serial.print(slot);
+      Serial.print(" ");
+      Serial.println(speed_value);
+
+      
+        char buf[sizeof ("encoder255,-32768")];
+        sprintf(buf, "encoder%u,%d", slot, speed_value);
+        synergy.broadcastJob(buf);
+        
         if(slot == SLOT_1)
         {
           Encoder_1.setTarPWM(speed_value);

@@ -2839,12 +2839,41 @@ void loop()
   
   if (task) {
     if (beginswith(task, "joystick") ) {
-      int leftSpeed;
-      int rightSpeed;
+      int16_t leftSpeed;
+      int16_t rightSpeed;
       
       if (sscanf(task, "joystick%d,%d", &leftSpeed, &rightSpeed) == 2) {
         Encoder_1.runSpeed(-leftSpeed);
         Encoder_2.runSpeed(-rightSpeed);
+      }
+    }else if (beginswith(task, "motor")) {
+      uint8_t port;
+      int16_t speed;
+      if (sscanf(task, "motor%u,%d", &port, &speed) == 2) {
+        dc.reset(port);
+        dc.run(speed);
+
+      }
+    }else if (beginswith(task, "encoder")) {
+        uint8_t slot;
+      int16_t speed_value;
+      if (sscanf(task, "encoder%u,%d", &slot, &speed_value) == 2) {
+        if(slot == SLOT_1)
+        {
+          Encoder_1.setTarPWM(speed_value);
+        }
+        else if(slot == SLOT_2)
+        {
+          Encoder_2.setTarPWM(speed_value);
+        }
+        else if(slot == SLOT_3)
+        {
+          Encoder_3.setTarPWM(speed_value);
+        }
+        else if(slot == SLOT_4)
+        {
+          Encoder_4.setTarPWM(speed_value);
+        }
       }
     }
 

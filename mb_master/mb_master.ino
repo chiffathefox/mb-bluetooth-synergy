@@ -169,6 +169,8 @@ boolean start_flag = false;
 boolean move_flag = false;
 boolean blink_flag = false;
 
+bool runScript = false;
+
 String mVersion = "0e.01.011";
 //////////////////////////////////////////////////////////////////////////////////////
 float RELAX_ANGLE = -1;                    //Natural balance angle,should be adjustment according to your own car
@@ -1318,8 +1320,9 @@ void runModule(uint8_t device)
       break;
     case JOYSTICK:
       {
-        int16_t leftSpeed = readShort(6) / 2;
-        int16_t rightSpeed = readShort(8) / 2;
+        const int16_t factor = 3;
+        int16_t leftSpeed = readShort(6) / factor;
+        int16_t rightSpeed = readShort(8) / factor;
         Encoder_1.runSpeed(-leftSpeed);
         Encoder_2.runSpeed(-rightSpeed);
 
@@ -1511,6 +1514,43 @@ void runModule(uint8_t device)
       break;
     case SHUTTER:
       {
+        
+
+        enum ShutterAction : uint8_t {
+          ShutterRelease = 1,
+          ShutterUnfocus = 3
+        };
+        
+        ShutterAction v = static_cast<ShutterAction>(readBuffer(7));
+        
+        Serial.print("SHUTTER ");
+        Serial.print(port);
+        Serial.print(" ");
+        Serial.println(v);
+
+        if (port != 8) {
+          break;
+        }
+
+        switch (v) {
+
+
+          case ShutterUnfocus:
+
+            runScript = true;
+
+            break;
+
+
+          case ShutterRelease:
+
+            runScript = false;
+
+            break;
+
+            
+        }
+#if 0
         if(generalDevice.getPort() != port)
         {
           generalDevice.reset(port);
@@ -1524,6 +1564,7 @@ void runModule(uint8_t device)
         {
           generalDevice.dWrite2(v-2);
         }
+#endif
       }
       break;
     case DIGITAL:
@@ -2746,6 +2787,59 @@ void setup()
   synergy.begin();
 }
 
+
+static void scriptLoop()
+{
+  static enum {
+    ScriptLoopForward = 0,
+    ScriptLoopForwardWait,
+    ScriptLoopLeft,
+    ScriptLoopLeftWait
+  } state;
+
+  switch (state) {
+
+
+  case ScriptLoopForward:
+
+    synergy.broadcastJob("mv1,1800,100;2,-1800,100");
+
+    state = ScriptLoopForwardWait;
+
+    break;
+
+
+  case ScriptLoopForwardWait:
+  
+    if (synergy.jobFinished()) {
+      Serial.println("finished1");
+      state = ScriptLoopLeft;
+    }
+
+    break;
+
+
+  case ScriptLoopLeft:
+
+    synergy.broadcastJob("mv1,2600,100;2,-1000,100");
+
+    state = ScriptLoopLeftWait;
+
+    break;
+
+
+  case ScriptLoopLeftWait:
+
+    if (synergy.jobFinished()) {
+      Serial.println("finished2");
+      runScript = false;
+    }
+
+    break;
+  }
+}
+
+
 /**
  * \par Function
  *    loop
@@ -2876,6 +2970,10 @@ void loop()
   else if(megapi_mode == LINE_FOLLOW_MODE)
   {
     line_model();
+  }
+
+  if (runScript) {
+    scriptLoop();
   }
 }
 

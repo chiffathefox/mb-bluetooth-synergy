@@ -2641,6 +2641,38 @@ boolean read_serial(void)
     return result;
   }
 }
+
+
+static MeEncoderOnBoard *getEncoder(uint8_t slot)
+{
+  switch (slot) {
+
+  case SLOT_1:
+
+    return &Encoder_1;
+
+
+  case SLOT_2:
+
+    return &Encoder_2;
+
+
+  case SLOT_3:
+
+    return &Encoder_3;
+
+
+  case SLOT_4:
+
+    return &Encoder_4;
+
+    
+  }
+
+  return &Encoder_1;
+}
+
+
 void setup()
 {
   delay(5);
@@ -2701,7 +2733,85 @@ void setup()
   blink_time = millis();
 
   synergy.begin();
+
+#define log_slot(s)  Serial.print(#s " "); Serial.println(s);
+  log_slot(SLOT_1);
+  log_slot(SLOT_2);
+  log_slot(SLOT_3);
+  log_slot(SLOT_4);
 }
+
+
+static unsigned char taskCallbackCounter = 0;
+
+
+static void taskCallback(int16_t slot, int16_t)
+{
+  Serial.print(__func__);
+  Serial.println(taskCallbackCounter);
+  if (taskCallbackCounter == 0) {
+    return;
+  }
+  
+  getEncoder(slot)->runSpeed(0);
+  taskCallbackCounter--; 
+  if (taskCallbackCounter == 0) {
+    Serial.println("finishing job");
+    synergy.finishJob();
+  }
+}
+
+
+static void parseTask()
+{
+  const char *task = synergy.availableJob();
+  
+  if (task) {
+    uint8_t port;
+    long int angle;
+    int speed;
+
+    if (beginswith(task, "move")) {
+      if (sscanf(task, "move%u,%ld,%d", &port, &angle, &speed) == 3) {
+        getEncoder(port)->moveTo(angle, speed, 0, &taskCallback);
+        taskCallbackCounter = 1;
+      }
+    } else if (beginswith(task, "mv")) {
+        uint8_t port1;
+        long int angle1;
+        int speed1;
+      if (sscanf(task, "mv%u,%ld,%d;%u,%ld,%d", &port, &angle, &speed, &port1, &angle1, &speed1) == 6) {
+        
+        getEncoder(port)->moveTo(angle, speed, 0, &taskCallback);
+        getEncoder(port1)->moveTo(angle1, speed1, 0, &taskCallback);
+        taskCallbackCounter = 2;
+      }
+    } else {
+    
+      synergy.finishJob();
+      
+      if (beginswith(task, "joystick") ) {
+        int leftSpeed;
+        int rightSpeed;
+        
+        if (sscanf(task, "joystick%d,%d", &leftSpeed, &rightSpeed) == 2) {
+          Encoder_1.runSpeed(-leftSpeed);
+          Encoder_2.runSpeed(-rightSpeed);
+        }
+      }else if (beginswith(task, "motor")) {
+        if (sscanf(task, "motor%u,%d", &port, &speed) == 2) {
+          dc.reset(port);
+          dc.run(speed);
+        }
+      }else if (beginswith(task, "encoder")) {
+        if (sscanf(task, "encoder%u,%d", &port, &speed) == 2) {
+          getEncoder(port)->setTarPWM(speed);
+        }
+      }
+    }
+  }
+}
+
 
 /**
  * \par Function
@@ -2835,49 +2945,6 @@ void loop()
     line_model();
   }
 
-  const char *task = synergy.availableJob();
-  
-  if (task) {
-    if (beginswith(task, "joystick") ) {
-      int16_t leftSpeed;
-      int16_t rightSpeed;
-      
-      if (sscanf(task, "joystick%d,%d", &leftSpeed, &rightSpeed) == 2) {
-        Encoder_1.runSpeed(-leftSpeed);
-        Encoder_2.runSpeed(-rightSpeed);
-      }
-    }else if (beginswith(task, "motor")) {
-      uint8_t port;
-      int16_t speed;
-      if (sscanf(task, "motor%u,%d", &port, &speed) == 2) {
-        dc.reset(port);
-        dc.run(speed);
-
-      }
-    }else if (beginswith(task, "encoder")) {
-        uint8_t slot;
-      int16_t speed_value;
-      if (sscanf(task, "encoder%u,%d", &slot, &speed_value) == 2) {
-        if(slot == SLOT_1)
-        {
-          Encoder_1.setTarPWM(speed_value);
-        }
-        else if(slot == SLOT_2)
-        {
-          Encoder_2.setTarPWM(speed_value);
-        }
-        else if(slot == SLOT_3)
-        {
-          Encoder_3.setTarPWM(speed_value);
-        }
-        else if(slot == SLOT_4)
-        {
-          Encoder_4.setTarPWM(speed_value);
-        }
-      }
-    }
-
-    synergy.finishJob();
-  }
+  parseTask();
 }
 

@@ -58,6 +58,9 @@ MeLineFollower line(PORT_8);
 
 static Synergy synergy(Synergy::Slave, "GOOD_DALEK", "thereisnospoon", &Serial2, NULL);
 
+static long int encPos[SLOT_4 + 1];
+
+
 typedef struct MeModule
 {
   int16_t device;
@@ -2739,6 +2742,8 @@ void setup()
   log_slot(SLOT_2);
   log_slot(SLOT_3);
   log_slot(SLOT_4);
+
+  memset(encPos, 0, sizeof (encPos));
 }
 
 
@@ -2765,27 +2770,32 @@ static void taskCallback(int16_t slot, int16_t)
 static void parseTask()
 {
   const char *task = synergy.availableJob();
+  static const char lastTask[Synergy::MaxTaskLength + 1];
   
   if (task) {
     uint8_t port;
     long int angle;
     int speed;
 
-    if (beginswith(task, "move")) {
-      if (sscanf(task, "move%u,%ld,%d", &port, &angle, &speed) == 3) {
-        getEncoder(port)->moveTo(angle, speed, 0, &taskCallback);
-        taskCallbackCounter = 1;
-      }
-    } else if (beginswith(task, "mv")) {
-        uint8_t port1;
-        long int angle1;
-        int speed1;
-      if (sscanf(task, "mv%u,%ld,%d;%u,%ld,%d", &port, &angle, &speed, &port1, &angle1, &speed1) == 6) {
-        
-        getEncoder(port)->moveTo(angle, speed, 0, &taskCallback);
-        getEncoder(port1)->moveTo(angle1, speed1, 0, &taskCallback);
-        taskCallbackCounter = 2;
-      }
+    Serial.println(task);
+    
+    if (strcmp(task, lastTask) != 0) {
+        if (beginswith(task, "move")) {
+          if (sscanf(task, "move%u,%ld,%d", &port, &angle, &speed) == 3) {
+            getEncoder(port)->move(angle, speed, 0, &taskCallback);
+            taskCallbackCounter = 1;
+          }
+        } else if (beginswith(task, "mv")) {
+            uint8_t port1;
+            long int angle1;
+            int speed1;
+          if (sscanf(task, "mv%u,%ld,%d;%u,%ld,%d", &port, &angle, &speed, &port1, &angle1, &speed1) == 6) {
+            
+            getEncoder(port)->move(angle, speed, 0, &taskCallback);
+            getEncoder(port1)->move(angle1, speed1, 0, &taskCallback);
+            taskCallbackCounter = 2;
+          }
+        }
     } else {
     
       synergy.finishJob();
@@ -2809,6 +2819,8 @@ static void parseTask()
         }
       }
     }
+
+    strcpy(lastTask, task);
   }
 }
 

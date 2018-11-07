@@ -1545,6 +1545,7 @@ void runModule(uint8_t device)
           case ShutterRelease:
 
             runScript = false;
+            synergy.broadcastJob("mv1,0,0;2,0,0");
 
             break;
 
@@ -2797,12 +2798,21 @@ static void scriptLoop()
     ScriptLoopLeftWait
   } state;
 
+  static unsigned long last = millis();
+
+  if (millis() - last < 5000) {
+     return;
+  }
+
+
+ last = millis(); 
+
   switch (state) {
 
 
   case ScriptLoopForward:
 
-    synergy.broadcastJob("mv1,1800,100;2,-1800,100");
+    synergy.broadcastJob("mv1,900,100;2,-900,100");
 
     state = ScriptLoopForwardWait;
 
@@ -2821,7 +2831,7 @@ static void scriptLoop()
 
   case ScriptLoopLeft:
 
-    synergy.broadcastJob("mv1,2600,100;2,-1000,100");
+    synergy.broadcastJob("mv1,900,100;2,900,100");
 
     state = ScriptLoopLeftWait;
 
@@ -2832,7 +2842,7 @@ static void scriptLoop()
 
     if (synergy.jobFinished()) {
       Serial.println("finished2");
-      runScript = false;
+      state = 0;
     }
 
     break;
@@ -2975,5 +2985,7 @@ void loop()
   if (runScript) {
     scriptLoop();
   }
+
+  synergy.jobFinished();
 }
 

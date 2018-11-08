@@ -58,8 +58,6 @@ MeLineFollower line(PORT_8);
 
 static Synergy synergy(Synergy::Slave, "GOOD_DALEK", "thereisnospoon", &Serial2, NULL);
 
-static long int encPos[SLOT_4 + 1];
-
 
 typedef struct MeModule
 {
@@ -2742,8 +2740,6 @@ void setup()
   log_slot(SLOT_2);
   log_slot(SLOT_3);
   log_slot(SLOT_4);
-
-  memset(encPos, 0, sizeof (encPos));
 }
 
 

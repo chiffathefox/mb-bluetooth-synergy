@@ -1547,6 +1547,10 @@ void runModule(uint8_t device)
             runScript = false;
             synergy.broadcastJob("mv1,0,0;2,0,0");
 
+            Encoder_1.move(0, 0, 0);
+            Encoder_2.move(0, 0, 0);
+            Encoder_3.move(0, 0, 0);
+
             break;
 
             
@@ -2789,64 +2793,191 @@ void setup()
 }
 
 
+static MeEncoderOnBoard *getEncoder(uint8_t slot)
+{
+  switch (slot) {
+
+  case SLOT_1:
+
+    return &Encoder_1;
+
+
+  case SLOT_2:
+
+    return &Encoder_2;
+
+
+  case SLOT_3:
+
+    return &Encoder_3;
+
+
+  case SLOT_4:
+
+    return &Encoder_4;
+
+    
+  }
+
+  return &Encoder_1;
+}
+
+
+static unsigned char scriptMvCallbackCounter = 0;
+static unsigned long scriptMvStart = 0;
+
+
+static void scriptMvCallback(int16_t slot, int16_t)
+{
+    if (scriptMvCallbackCounter != 0) {
+        getEncoder(slot)->runSpeed(0);
+        scriptMvCallbackCounter--; 
+    }
+}
+
+
+static void scriptMove(unsigned char slot, long angle, int speed)
+{
+    char buf[sizeof ("move255,-2147483648,-32768")];
+    sprintf(buf, "move%u,%ld,%d", slot, angle, speed);
+    synergy.broadcastJob(buf);
+
+    delay(10);
+
+    scriptMvStart = millis();
+    scriptMvCallbackCounter = 1;
+
+    getEncoder(slot)->move(angle, speed, 0, &scriptMvCallback);
+}
+
+static void scriptMv(long angle1, int speed1, long angle2, int speed2)
+{
+    char buf[sizeof ("mv255,-2147483648,-32768;255,-2147483648,-32768")];
+    sprintf(buf, "mv1,%ld,%d;2,%ld,%d", angle1, speed1, angle2, speed2);
+    synergy.broadcastJob(buf);
+
+    delay(10);
+
+    scriptMvStart = millis();
+    scriptMvCallbackCounter = 2;
+
+    Encoder_1.move(angle1, speed1, 0, &scriptMvCallback);
+    Encoder_2.move(angle2, speed2, 0, &scriptMvCallback);
+}
+
+
+static bool scriptMvFinished()
+{
+    bool jobFinished = synergy.jobFinished();
+
+    if (millis() - scriptMvStart > 10000) {
+        jobFinished = true;
+    }
+
+    return scriptMvCallbackCounter == 0 && jobFinished;
+}
+
+
 static void scriptLoop()
 {
-  static enum {
-    ScriptLoopForward = 0,
-    ScriptLoopForwardWait,
-    ScriptLoopLeft,
-    ScriptLoopLeftWait
-  } state;
+    static enum {
+        ScriptLoopForward = 0,
+        ScriptLoopForwardWait,
+        ScriptLoopLeft,
+        ScriptLoopLeftWait,
+        ScriptLoopArmUp,
+        ScriptLoopArmUpWait,
+        ScriptLoopArmDown,
+        ScriptLoopArmDownWait
+    } state;
 
-  static unsigned long last = millis();
+    static unsigned long last = millis();
 
-  if (millis() - last < 5000) {
-     return;
-  }
-
-
- last = millis(); 
-
-  switch (state) {
-
-
-  case ScriptLoopForward:
-
-    synergy.broadcastJob("mv1,900,100;2,-900,100");
-
-    state = ScriptLoopForwardWait;
-
-    break;
-
-
-  case ScriptLoopForwardWait:
-  
-    if (synergy.jobFinished()) {
-      Serial.println("finished1");
-      state = ScriptLoopLeft;
+    if (millis() - last < 1000) {
+        return;
     }
 
-    break;
+
+    last = millis(); 
+
+    switch (state) {
 
 
-  case ScriptLoopLeft:
+    case ScriptLoopForward:
 
-    synergy.broadcastJob("mv1,900,100;2,900,100");
+        scriptMv(500, 100, -500, 100);
 
-    state = ScriptLoopLeftWait;
+        state = ScriptLoopForwardWait;
 
-    break;
+        break;
 
 
-  case ScriptLoopLeftWait:
+    case ScriptLoopForwardWait:
 
-    if (synergy.jobFinished()) {
-      Serial.println("finished2");
-      state = 0;
+        if (scriptMvFinished()) {
+            Serial.println("finished1");
+            state = ScriptLoopLeft;
+        }
+
+        break;
+
+
+    case ScriptLoopLeft:
+
+        scriptMv(800, 100, 800, 100);
+
+        state = ScriptLoopLeftWait;
+
+        break;
+
+
+    case ScriptLoopLeftWait:
+
+        if (scriptMvFinished()) {
+            Serial.println("finished2");
+            state = ScriptLoopArmUp;
+        }
+
+        break;
+
+
+    case ScriptLoopArmUp:
+
+        scriptMove(3, -300, 100);
+        state = ScriptLoopArmUpWait;
+
+        break;
+
+
+    case ScriptLoopArmUpWait:
+
+        if (scriptMvFinished()) {
+            Serial.println("arm up finished");
+            state = ScriptLoopArmDown;
+        }
+
+        break;
+
+
+    case ScriptLoopArmDown:
+
+        scriptMove(3, 300, 100);
+        state = ScriptLoopArmDownWait;
+
+        break;
+
+
+    case ScriptLoopArmDownWait:
+
+        if (scriptMvFinished()) {
+            Serial.println("arm down finished");
+            state = ScriptLoopForward;
+        }
+
+        break;
+
+
     }
-
-    break;
-  }
 }
 
 
